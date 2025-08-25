@@ -1,3 +1,7 @@
+name: CI_placeholder
+
+on: push
+
 jobs:
   build:
     runs-on: ubuntu-latest
