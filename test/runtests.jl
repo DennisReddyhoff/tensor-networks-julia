@@ -2,6 +2,6 @@ using Test
 using TensorNetworksJulia
 
 
-@testset "Olaceholder" begin
+@testset "Placeholder" begin
     @test 1 + 1 == 2
 end
