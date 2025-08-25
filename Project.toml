@@ -1,4 +1,4 @@
-name = "tensor-networks-julia"
+name = "TensorNetworksJulia"
 uuid = "971bfc3b-dad2-4e75-b6d4-7a738799c5e4"
 authors = ["dreddyho "]
 version = "0.1.0"
