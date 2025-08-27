@@ -44,7 +44,7 @@ for a `spin-1/2` system, where $S_z$ and $S_x$ are Pauli gates, $L$ is the numbe
 
 We define the MPO using `OpSum()` ([docs](https://docs.itensor.org/ITensorMPS/stable/OpSum.html))
 
-
+[MPO Basics on tensornetwork.org](https://tensornetwork.org/mpo/)
 """
 
 # ╔═╡ 6125b033-47d3-4964-a2d5-a523de9a0e3c
@@ -79,6 +79,8 @@ md"""
 ## Step 0: Setup
 
 Define problem parameters and random MPS. MPS is *right-canonical*.
+
+[MPS Basics on tensornetwork.org](https://tensornetwork.org/mps/)
 """
 
 # ╔═╡ b762f2e7-79f7-4bba-9bcb-995c4985a6f1
@@ -251,6 +253,11 @@ begin
 	nothing
 end
 
+# ╔═╡ bda18fb5-756c-4c74-9009-46e97d67c521
+md"""
+We can calculate the exact solution for small L (warning, $2^L$ scaling!!) and compare
+"""
+
 # ╔═╡ 03fa71be-3d41-4f56-ae16-ae9d05a36676
 begin	
 	H_dense = contract(H)
@@ -389,7 +396,7 @@ md"""
 ### Plots
 Some plots of different system sizes and n_sweeps
 
-Very slow for large L due to dense solving.
+Very slow for large L due to solving the exact Eigenproblem
 
 Even for L=10, we are just seeing numerical noise after 1 sweep.
 """
@@ -2156,6 +2163,7 @@ version = "1.9.2+0"
 # ╟─ffcf38f5-10ff-4790-8e30-9847121d9e91
 # ╠═88c4d3fa-86da-4e34-854f-c123fd9c8d6e
 # ╠═f397f066-1104-44ac-a2a3-27885c7c599a
+# ╟─bda18fb5-756c-4c74-9009-46e97d67c521
 # ╠═03fa71be-3d41-4f56-ae16-ae9d05a36676
 # ╠═62985a15-49e1-4705-9468-afc817b11b97
 # ╟─c70f1b03-602a-43ce-a9f0-be3091801ff9

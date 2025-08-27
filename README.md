@@ -12,7 +12,7 @@ julia --project=.
 
 ## 1) DMRG for Transverse Field Ising Model
 
-[Pluto Notebook (Hosted on pluto.land)](https://pluto.land/n/ym8pvhyd)
+[Pluto Notebook (Hosted on pluto.land)](https://pluto.land/n/7zlqrbkw)
 
 [Pluto Noteboook (Github)](notebooks/dmrg.jl)
 
