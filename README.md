@@ -24,8 +24,10 @@ Also see [DMRG.jl](src/DMRG.jl) and [DMRGPlots.jl](src/DMRGPlots.jl)
 - Bond-by-bond optimisation and full sweeps
 
 
-### TODO:
-
+### In Progress:
+On branch `hubbard`
 - 1D Hubbard Problem using iTensor
 - 1D Hubbard Problem using exact solution
+
+### TODO:
 - Benchmarking
