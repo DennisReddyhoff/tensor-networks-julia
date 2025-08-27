@@ -17,11 +17,11 @@ end
 md"""
 # DMRG Implementation
 
-Julia implementation of [Tensor Network Density Matrix Renormalization Group Algorithm (DMRG)](https://tensornetwork.org/mps/algorithms/dmrg/#toc_3)
+Julia implementation of [Tensor Network Density Matrix Renormalization Group Algorithm (DMRG)](https://tensornetwork.org/mps/algorithms/dmrg/#toc_3), a two-site DMRG algorithm.
 
 Further reading: [Density matrix formulation for quantum renormalization groups](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.69.2863)
 
-Basic demo using `ITensors` and some custom code with small `L` Transverse-field Ising Model and dense environments/hamiltonian
+Basic demo using `ITensors` and some custom code with small `L` Transverse-field Ising Model and dense environments/hamiltonian.
 
 [GitHub for this work](https://github.com/DennisReddyhoff/tensor-networks-julia)
 """
@@ -278,7 +278,7 @@ md"""
 ### Left -> Right -> Left "Full Sweep"
 We implement a full sweep using ITensor built-ins to make management of the environments and indices easier.
 
-Slightly confusingly, we maintain the same SVD decomposition both ways to keep ITensor dimensionality happy. 
+SVD decomposition is the same both ways, `position!` expects the left site of the two-site block, hence looping from `L-1`
 """
 
 # ╔═╡ e96be202-d2b1-48b9-b186-9a5d8451aadb
@@ -386,7 +386,7 @@ function run_dmrg(L; maxdim=4, cutoff=1e-12, n_sweeps=10)
 end
 
 # ╔═╡ 237e9b26-f13e-4bbc-aa8e-f455030d66e8
-M_optim, energy_optim, energy_exact = run_dmrg(4; maxdim=16, n_sweeps=100); nothing
+M_optim, energy_optim, energy_exact = run_dmrg(4; maxdim=16, n_sweeps=1); nothing
 
 # ╔═╡ ecde7952-1ace-4c7a-8b6f-e6a7f132f87a
 energy_exact -  energy_optim # Error vs exact
