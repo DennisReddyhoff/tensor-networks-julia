@@ -447,7 +447,7 @@ end
 end
 
 # ╔═╡ 67720351-2a22-4cdc-828f-b73f5c7d401f
-abs(e_1 - e_2)
+abs(e_1 - e_2) # Error vs exact for L=10
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """

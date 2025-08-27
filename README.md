@@ -3,9 +3,22 @@ Tensor Network Applications in Julia
 
 Preliminary study of Tensor Network applications in Julia.
 
-TODO:
+## 1) DMRG for Transverse Field Ising Model
 
-- Implementation of dense DMRG algorithm (https://tensornetwork.org/mps/algorithms/dmrg/#toc_3)
+[Pluto Notebook (Hosted on pluto.land)](https://pluto.land/n/urkym1rb)
+
+[Pluto Noteboook (Github)](notebooks/dmrg.jl)
+
+Also see [DMRG.jl](src/DMRG.jl) and [DMRGPlots.jl](src/DMRGPlots.jl)
+
+- Custom Julia DMRG implementation following https://tensornetwork.org/mps/algorithms/dmrg/#toc_3
+- Manual environment building and canonical forms vs ITensor
+- Comparison of DMRG vs exact diagonalization
+- Bond-by-bond optimisation and full sweeps
+
+
+### TODO:
+
 - 1D Hubbard Problem using iTensor
 - 1D Hubbard Problem using exact solution
 - Benchmarking
