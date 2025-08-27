@@ -8,7 +8,6 @@ using InteractiveUtils
 begin
 	using ITensors
 	using ITensorMPS
-	using TensorOperations
 	using KrylovKit
 	using LinearAlgebra
 	using Plots
@@ -22,7 +21,9 @@ Julia implementation of [Tensor Network Density Matrix Renormalization Group Alg
 
 Further reading: [Density matrix formulation for quantum renormalization groups](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.69.2863)
 
-Basic demo using `ITensors` with small `L` Transverse-field Ising Model and dense environments/hamiltonian
+Basic demo using `ITensors` and some custom code with small `L` Transverse-field Ising Model and dense environments/hamiltonian
+
+[GitHub for this work](https://github.com/DennisReddyhoff/tensor-networks-julia)
 """
 
 # ╔═╡ 13bc3500-39e4-4fd2-965a-72620db40fad
@@ -157,7 +158,7 @@ begin
 end
 
 # ╔═╡ c8690c12-7264-4475-8669-686ed2e031ed
-isapprox(vals, new_vals, rtol=1e-12) # Eigenvals are approx equal for both approaches
+isapprox(vals, new_vals, rtol=1e-14) # Eigenvals are approx equal for both approaches
 
 # ╔═╡ 471322e0-154d-4f58-9eef-e1ae2c7df902
 md"""
@@ -302,8 +303,8 @@ function get_H(L)
 end
 
 # ╔═╡ dcc2cac4-4fcb-4a28-b832-652590d51ae4
-# Take one DMRG step, left -> right -> left
-function dmrg_step!(M, H; maxdim=4, cutoff=1e-12)
+# DMRG sweep, left -> right -> left
+function dmrg_sweep!(M, H; maxdim=4, cutoff=1e-12)
     
 	L = length(M)
     energies = Float64[]
@@ -370,7 +371,7 @@ function run_dmrg(L; maxdim=4, cutoff=1e-12, n_sweeps=10)
     M = randomMPS(sites, maxdim)
 	E_now = Inf
     for sweep in 1:n_sweeps
-        M, sweep_energies = dmrg_step!(M, H; maxdim=maxdim, cutoff=cutoff)
+        M, sweep_energies = dmrg_sweep!(M, H; maxdim=maxdim, cutoff=cutoff)
         E_now = minimum(sweep_energies)
     end
 	
@@ -381,7 +382,7 @@ end
 M_optim, energy_optim, energy_exact = run_dmrg(4; maxdim=16, n_sweeps=100); nothing
 
 # ╔═╡ ecde7952-1ace-4c7a-8b6f-e6a7f132f87a
-energy_exact -  energy_optim
+energy_exact -  energy_optim # Error vs exact
 
 # ╔═╡ 082848a6-e0c9-4f97-abe3-4748afcac4ca
 md"""
@@ -389,23 +390,64 @@ md"""
 Some plots of different system sizes and n_sweeps
 
 Very slow for large L due to dense solving.
+
+Even for L=10, we are just seeing numerical noise after 1 sweep.
 """
 
-# ╔═╡ 8838454b-c59d-46a6-90cf-68807ddb7c3d
+# ╔═╡ 725a08dd-41fa-4135-974c-c049771e56f4
 begin
-	L_list = 4:8
-	sweeps_list = 10:10:100
+	L_list = 3:6
+	sweeps_list = [1, 10, 25, 50, 100]
 	errors = Dict()
 	for L in L_list
-		for sweeps in sweeps_list
-			_, e_opt, e_exact = run_dmrg(L; maxdim=32, n_sweeps=sweeps)
-			errors[(L, sweeps)] = abs(e_opt - e_exact)
-		end
+	    for sweeps in sweeps_list
+	        _, e_opt, e_exact = run_dmrg(L; maxdim=32, n_sweeps=sweeps)
+	        errors[(L, sweeps)] = abs(e_opt - e_exact)
+	    end
 	end
+	nothing
 end
 
-# ╔═╡ a4930ac6-1abc-4bf4-8c20-8f4bc6a62326
+# ╔═╡ 6aae4f92-9142-4784-83b7-a79593b6a23b
+error_matrix = [errors[(L, sweeps)] for L in L_list, sweeps in sweeps_list]; nothing
 
+# ╔═╡ 4b56327e-75c5-4bf6-96d3-07f5e508c710
+begin
+	plt_hm = heatmap(
+				sweeps_list, L_list, error_matrix;
+		        xlabel="Number of Sweeps",
+		        ylabel="Chain Length L",
+		        title="DMRG Energy Error vs Exact",
+		        yflip=true,
+		        color=:viridis,
+		        clims=(minimum(error_matrix), maximum(error_matrix))
+	)
+	plt_hm
+end
+
+# ╔═╡ 1ca1e777-5261-4f6a-a025-d7dd3882cbe9
+begin
+    plt = plot(xlabel="Number of Sweeps",
+               ylabel="Energy Error",
+               title="DMRG Energy Error vs Exact")
+	
+    for (i, L) in enumerate(L_list)
+        y = error_matrix[i, :]  # ith row corresponds to L
+        plot!(sweeps_list, y, label="L = $L", lw=2, marker=:o)
+    end
+
+	plt
+end
+
+# ╔═╡ b9b9cca7-15fd-478a-b542-14147545760a
+# Run with L = 10 and 1 sweep
+@set_warn_order 21 begin
+	_, e_1, e_2 = run_dmrg(10; maxdim=128, n_sweeps=1)
+	nothing
+end
+
+# ╔═╡ 67720351-2a22-4cdc-828f-b73f5c7d401f
+abs(e_1 - e_2)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -415,14 +457,12 @@ ITensors = "9136182c-28ba-11e9-034c-db9fb085ebd5"
 KrylovKit = "0b1a1467-8014-51b9-945f-bf0ae24f4b77"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-TensorOperations = "6aa20fa7-93e2-5fca-9bc0-fbd0db3c71a2"
 
 [compat]
 ITensorMPS = "~0.3.19"
 ITensors = "~0.9.9"
 KrylovKit = "~0.10.0"
 Plots = "~1.40.19"
-TensorOperations = "~5.3.0"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -431,7 +471,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.6"
 manifest_format = "2.0"
-project_hash = "bbf1672727ecea7dd8164733cf886a6523af3c37"
+project_hash = "c603f1f7fefc29b7916843b4786732a2b40eb7bb"
 
 [[deps.Accessors]]
 deps = ["CompositionsBase", "ConstructionBase", "Dates", "InverseFunctions", "MacroTools"]
@@ -1086,15 +1126,6 @@ git-tree-sha1 = "eb62a3deb62fc6d8822c0c4bef73e4412419c5d8"
 uuid = "1d63c593-3942-5779-bab2-d838dc0a180e"
 version = "18.1.8+0"
 
-[[deps.LRUCache]]
-git-tree-sha1 = "5519b95a490ff5fe629c4a7aa3b3dfc9160498b3"
-uuid = "8ac3fa9e-de4c-5943-b1dc-09c6b5f20637"
-version = "1.6.2"
-weakdeps = ["Serialization"]
-
-    [deps.LRUCache.extensions]
-    SerializationExt = ["Serialization"]
-
 [[deps.LZO_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "1c602b1127f4751facb671441ca72715cc95938a"
@@ -1697,23 +1728,6 @@ git-tree-sha1 = "1feb45f88d133a655e001435632f019a9a1bcdb6"
 uuid = "62fd8b95-f654-4bbd-a8a5-9c27f68ccd50"
 version = "0.1.1"
 
-[[deps.TensorOperations]]
-deps = ["LRUCache", "LinearAlgebra", "PackageExtensionCompat", "PrecompileTools", "Preferences", "PtrArrays", "Strided", "StridedViews", "TupleTools", "VectorInterface"]
-git-tree-sha1 = "3310043173822e3d868262c2b3005a856fcc587f"
-uuid = "6aa20fa7-93e2-5fca-9bc0-fbd0db3c71a2"
-version = "5.3.0"
-
-    [deps.TensorOperations.extensions]
-    TensorOperationsBumperExt = "Bumper"
-    TensorOperationsChainRulesCoreExt = "ChainRulesCore"
-    TensorOperationscuTENSORExt = ["cuTENSOR", "CUDA"]
-
-    [deps.TensorOperations.weakdeps]
-    Bumper = "8ce10254-0962-460f-a3d8-1f77fea1446e"
-    CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-    cuTENSOR = "011b41b2-24ef-40a8-b3eb-fa098493e9e1"
-
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
@@ -2124,7 +2138,7 @@ version = "1.9.2+0"
 # ╔═╡ Cell order:
 # ╟─96f3ad0d-d09c-4825-9317-1ff08c6ba8c4
 # ╠═50779a7f-a54f-46a1-80e2-d6b53280e04a
-# ╟─13bc3500-39e4-4fd2-965a-72620db40fad
+# ╠═13bc3500-39e4-4fd2-965a-72620db40fad
 # ╠═6125b033-47d3-4964-a2d5-a523de9a0e3c
 # ╟─8db5287b-dc13-4e57-8b19-620c6cb50b2b
 # ╠═b762f2e7-79f7-4bba-9bcb-995c4985a6f1
@@ -2152,7 +2166,11 @@ version = "1.9.2+0"
 # ╠═237e9b26-f13e-4bbc-aa8e-f455030d66e8
 # ╠═ecde7952-1ace-4c7a-8b6f-e6a7f132f87a
 # ╟─082848a6-e0c9-4f97-abe3-4748afcac4ca
-# ╠═8838454b-c59d-46a6-90cf-68807ddb7c3d
-# ╠═a4930ac6-1abc-4bf4-8c20-8f4bc6a62326
+# ╠═725a08dd-41fa-4135-974c-c049771e56f4
+# ╠═6aae4f92-9142-4784-83b7-a79593b6a23b
+# ╠═4b56327e-75c5-4bf6-96d3-07f5e508c710
+# ╠═1ca1e777-5261-4f6a-a025-d7dd3882cbe9
+# ╠═b9b9cca7-15fd-478a-b542-14147545760a
+# ╠═67720351-2a22-4cdc-828f-b73f5c7d401f
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
