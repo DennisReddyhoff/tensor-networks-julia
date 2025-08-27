@@ -3,6 +3,13 @@ Tensor Network Applications in Julia
 
 Preliminary study of Tensor Network applications in Julia.
 
+To run (with Julia installed):
+```
+git clone https://github.com/DennisReddyhoff/tensor-networks-julia.git
+cd tensor-networks-julia
+julia --project=.
+```
+
 ## 1) DMRG for Transverse Field Ising Model
 
 [Pluto Notebook (Hosted on pluto.land)](https://pluto.land/n/urkym1rb)
