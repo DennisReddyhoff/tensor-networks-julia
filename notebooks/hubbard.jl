@@ -10,7 +10,15 @@ begin
 	using ITensorMPS
 	using LinearAlgebra
 	using Plots
+	using Combinatorics
+	using SparseArrays
+	using KrylovKit
 end
+
+# ╔═╡ 356cc532-fb02-45d4-bec7-a2d4654877e2
+md"""
+We create a struct and it's constructor for the 1D Hubbard System. These need to be in the same cell in Pluto to avoid namespace clashes.
+"""
 
 # ╔═╡ 03916343-2294-4148-8f38-cd312118ac8d
 begin
@@ -18,7 +26,7 @@ begin
 		L::Int
 		U::Float64
 		t::Float64
-		sites::Vector{Index}
+		sites::Vector{ITensors.Index}
 		mpo::MPO
 		mps::MPS
 	end
@@ -43,6 +51,11 @@ begin
 	end
 end
 
+# ╔═╡ 19308d82-eea4-4876-8923-81b2ba6e8352
+md"""
+An Observer is an ITensor interface to access values from the DMRG at each step or each sweep. Our `EnergyObserve`r inherits from `AbstractObserver` and we store the energy at each step. `checkdone!` is passed to the observer at the end of each sweep, we could also overload `measure!`, which is passed at each step i.e. every site for every sweep.
+"""
+
 # ╔═╡ 89da86e9-81df-4649-a2d2-f0193ab3f8f1
 begin
 	mutable struct EnergyObserver <: ITensorMPS.AbstractObserver
@@ -54,6 +67,11 @@ begin
 	end
 end
 
+# ╔═╡ 54190501-f71c-4752-8ad5-498cf92533a4
+md"""
+We build a wrapper for the ITensor DMRG routine, passing the MPO and MPS for our system and returning energy values from the observer.
+"""
+
 # ╔═╡ d1c7fd9b-c4b4-4f54-b3f3-ff0c852fc351
 function get_dmrg_energy(
 	sys::HubbardSystem; 
@@ -61,18 +79,25 @@ function get_dmrg_energy(
 	maxdim=100, 
 	cutoff=1e-12
 )
+	# Create observer
 	obs = EnergyObserver(Float64[])
-	energy, _ = dmrg(
+	# We only need the observer so don't store function return
+	dmrg(
 		sys.mpo, 
 		sys.mps; 
-		nsweeps = nsweeps, 
+		nsweeps=nsweeps, 
 		maxdim=maxdim, 
 		cutoff=cutoff,
 		observer=obs,
 		outputlevel = 0 # Suppress output
 	)
-	return energy, obs
+	return obs.energies
 end
+
+# ╔═╡ 6b44fb80-f1f6-4c1d-ad73-73ecba9bd327
+md"""
+For small L we can solve the system exactly by building the dense Hamiltonian, the Hilbert space dim is $4^L$ for this model, vs. $2^L$ for the 1D Transverse Field Ising Model. The cost to construct and diagonalize a dense $4^L$ x $4^L$ matrix is $\mathcal{O}((4^L)^3$
+"""
 
 # ╔═╡ 3411e784-d9a5-47c8-99cd-b160bde62747
 function get_exact_energy(sys::HubbardSystem)
@@ -85,39 +110,345 @@ function get_exact_energy(sys::HubbardSystem)
     return minimum(vals_exact)
 end
 
-# ╔═╡ 618943aa-f998-414d-9602-c0f3fdaa5d2b
-function get_abs_error(sys::HubbardSystem; kwargs...)
-	dmrg, obs = get_dmrg_energy(sys; kwargs...)
-	exact = get_exact_energy(sys)
-	return dmrg, exact, abs(dmrg - exact), obs
-end
-
 # ╔═╡ de9db2de-0690-49b7-9cc5-bb6ef7d52a2e
 begin
-	L, U, t = 3, 4.0, 1.0
+	# Define the Hubbard System parameters
+	L, U, t = 4, 4.0, 1.0
+	nsweeps = 25
+	# Build system
 	sys = HubbardSystem(L, U, t)
+	# Get exact/variational energies
+	exact = get_exact_energy(sys)
+	dmrg_energies = get_dmrg_energy(sys; nsweeps=nsweeps)
+	nothing
 end
 
-# ╔═╡ 6e1bc960-b50d-48c5-948c-604c4a3e0dd2
-_, exact, error, obs = get_abs_error(sys; nsweeps = 100)
-
 # ╔═╡ 30e37d1e-b0dd-4427-be31-4b95ad458ea2
-plot(1:length(obs.energies), obs.energies)
+begin
+	xvals = 1:nsweeps
+	plot(xvals, dmrg_energies)
+end
 
 # ╔═╡ 0bb71ff2-6230-4399-ad6a-ae9cd4ae56e5
-plot(1:length(obs.energies), (abs.(obs.energies .- exact).+ 1e-18); yaxis = :log10)
+begin
+	jitter = 1e-18
+	yvals = abs.(dmrg_energies .- exact) .+ jitter
+	plot(xvals, yvals; yaxis = :log10)
+end
+
+# ╔═╡ b3ca3f4b-8a85-4d57-9120-82622c96564a
+function get_basis_states(L, Nup, Ndn)
+    # Each configuration is represented as a bitmask integer: bits 0..L-1
+    # Bit i = 1 means site i is occupied
+    up_combinations = collect(combinations(1:L, Nup))
+    dn_combinations = collect(combinations(1:L, Ndn))
+    
+    dim = length(up_combinations) * length(dn_combinations)  # Hilbert space dims
+
+    # Map each (upmask, dnmask) to a unique basis index
+    state_map = Dict{Tuple{Int,Int},Int}()
+    states = Tuple{Int,Int}[]  # store all states
+    idx = 1
+    for up in up_combinations
+        upmask = foldl(|, map(i -> 1 << (i-1), up); init=0)  # bitmask for up electrons
+        for dn in dn_combinations
+            dnmask = foldl(|, map(i -> 1 << (i-1), dn); init=0)  # bitmask for down electrons
+            state_map[(upmask,dnmask)] = idx
+            push!(states, (upmask,dnmask))
+            idx += 1
+        end
+    end
+	return states, state_map
+end
+
+# ╔═╡ 800a42bd-4252-4637-bcd4-b9d618a90374
+function fermionic_sign(mask, from, to)
+    """Calculate fermionic sign for hopping from 'from' to 'to' site"""
+    start_bit = min(from, to) - 1  # Convert to 0-indexed
+    end_bit = max(from, to) - 1
+    
+    # Count occupied sites between from and to (exclusive)
+    # This gives the number of fermion crossings
+    count = 0
+    for bit in (start_bit + 1):(end_bit - 1)
+        if (mask >> bit) & 1 == 1
+            count += 1
+        end
+    end
+    
+    # Fermionic sign: (-1)^count
+    return iseven(count) ? 1 : -1
+end
+
+# ╔═╡ 30a0b412-9a2f-4d7f-8c84-e1732d7f80de
+function get_sparse_H(sys, states, state_map)
+	dim = length(states)
+	H = spzeros(Float64, dim, dim)
+    for (i, (upmask, dnmask)) in enumerate(states)
+
+        # 3a. Diagonal term: on-site interaction U * n_up * n_dn
+        # bitwise AND gives sites with both up and down electrons
+        H[i,i] = sys.U * count_ones(upmask & dnmask)
+
+        # 3b. Off-diagonal term: hopping
+        # electrons hop to nearest neighbors (open chain)
+        for site in 1:(sys.L-1)  # open boundaries
+            for (from,to) in ((site, site+1), (site+1, site))
+
+                # --- Hopping for up electrons ---
+                if (upmask >> (from-1)) & 1 == 1 && (upmask >> (to-1)) & 1 == 0
+                    new_upmask = (upmask & ~(1 << (from-1))) | (1 << (to-1))
+                    j = state_map[(new_upmask, dnmask)]
+					sign = fermionic_sign(upmask, from, to)
+                    H[i,j] += -sys.t  * sign  # hopping amplitude
+                end
+
+                # --- Hopping for down electrons ---
+                if (dnmask >> (from-1)) & 1 == 1 && (dnmask >> (to-1)) & 1 == 0
+                    new_dnmask = (dnmask & ~(1 << (from-1))) | (1 << (to-1))
+                    j = state_map[(upmask, new_dnmask)]
+					sign = fermionic_sign(dnmask, from, to)
+                    H[i,j] += -sys.t  * sign  # hopping amplitude
+                end
+            end
+        end
+    end
+	return H
+end
+
+# ╔═╡ f6d37a19-d451-43b9-bc52-9e3ecd75ae71
+function get_exact_energy_all_sectors(sys::HubbardSystem)
+    """Find the global ground state across all QN sectors"""
+    
+    min_energy = Inf
+    best_sector = (0, 0)
+	v0 = Float64[]
+    
+    println("Searching across all QN sectors:")
+    
+    # Try all possible particle number combinations
+    for Nup in 0:sys.L
+        for Ndn in 0:sys.L
+			states, state_map = get_basis_states(sys.L, Nup, Ndn)
+			if isempty(states)
+				continue
+			end
+			
+			H_sparse = get_sparse_H(sys, states, state_map)
+			v0 = rand(Float64, size(H_sparse, 1))			
+			vals, _ = eigsolve(H_sparse, v0, 1, :SR)
+			sector_energy = vals[1]
+
+			if sector_energy < min_energy
+				min_energy = sector_energy
+				best_sector = (Nup, Ndn)
+			end
+        end
+    end
+    
+    println("Global ground state: E = $min_energy in sector $best_sector")
+    return min_energy
+end
+
+# ╔═╡ b6e555bd-676e-4456-a756-4a3544e89cc0
+function get_sparse_H_hopping(sys, states, state_map)
+	dim = length(states)
+	
+	# Build i, j, vals first and create sparse matrix once at the end
+    rows = Int[]
+    cols = Int[]
+    vals = Float64[]
+
+	# Precompute hopping pairs outside of loop
+	hopping_pairs = [(i, i+1) for i in 1:(sys.L-1)]
+	all_pairs = vcat(hopping_pairs, [(b, a) for (a, b) in hopping_pairs])
+	
+    for (i, (upmask, dnmask)) in enumerate(states)
+
+        # Interaction term
+        push!(rows, i)
+        push!(cols, i)
+        push!(vals, sys.U * count_ones(upmask & dnmask))
+
+        # Hopping term        
+		for (from,to) in all_pairs
+
+			# --- Hopping for up electrons ---
+			if (upmask >> (from-1)) & 1 == 1 && (upmask >> (to-1)) & 1 == 0
+				new_upmask = (upmask & ~(1 << (from-1))) | (1 << (to-1))
+				j = state_map[(new_upmask, dnmask)]
+				sign = fermionic_sign(upmask, from, to)
+		        push!(rows, i)
+		        push!(cols, j)
+		        push!(vals, -sys.t  * sign)
+			end
+
+			# --- Hopping for down electrons ---
+			if (dnmask >> (from-1)) & 1 == 1 && (dnmask >> (to-1)) & 1 == 0
+				new_dnmask = (dnmask & ~(1 << (from-1))) | (1 << (to-1))
+				j = state_map[(upmask, new_dnmask)]
+				sign = fermionic_sign(dnmask, from, to)
+		        push!(rows, i)
+		        push!(cols, j)
+		        push!(vals, -sys.t  * sign)
+			end
+		end
+        
+    end
+	return sparse(rows, cols, vals, dim, dim)
+end
+
+# ╔═╡ 60b73927-5131-4ecf-bc22-b33a38ade6f6
+# get_exact_energy_all_sectors(new_sys)
+
+# ╔═╡ 2c9b9ba1-4da2-4dbd-bbc4-519a5420b4ab
+function get_sparse_H_prealloc(sys, states, states_map)
+	dim = length(states)
+	
+    # Estimate max nonzeros, rough upper bound: 2 electrons max per site
+    max_nnz = dim * (1 + 2*sys.L + 2*sys.L)
+    rows = Vector{Int}(undef, max_nnz)
+    cols = Vector{Int}(undef, max_nnz)
+    vals = Vector{Float64}(undef, max_nnz)
+    ptr = 1  # next insertion index
+	
+    for (i, (upmask, dnmask)) in enumerate(states)
+
+        # Interaction term
+        rows[ptr] = i
+        cols[ptr] = i
+        vals[ptr] = sys.U * count_ones(upmask & dnmask)
+        ptr += 1
+
+        # Hopping term        
+        for site in 1:(sys.L-1)  # open boundaries
+            for (from,to) in ((site, site+1), (site+1, site))
+
+				# --- Hopping for up electrons ---
+				if (upmask >> (from-1)) & 1 == 1 && (upmask >> (to-1)) & 1 == 0
+					new_upmask = (upmask & ~(1 << (from-1))) | (1 << (to-1))
+					j = states_map[(new_upmask, dnmask)]
+					sign = fermionic_sign(upmask, from, to)
+	                rows[ptr] = i
+	                cols[ptr] = j
+	                vals[ptr] = -sys.t * sign
+	                ptr += 1
+				end
+	
+				# --- Hopping for down electrons ---
+				if (dnmask >> (from-1)) & 1 == 1 && (dnmask >> (to-1)) & 1 == 0
+					new_dnmask = (dnmask & ~(1 << (from-1))) | (1 << (to-1))
+					j = states_map[(upmask, new_dnmask)]
+					sign = fermionic_sign(dnmask, from, to)
+	                rows[ptr] = i
+	                cols[ptr] = j
+	                vals[ptr] = -sys.t * sign
+	                ptr += 1
+				end
+			end
+		end
+    end
+
+	# Trim arrays
+	rows = rows[1:ptr-1]
+    cols = cols[1:ptr-1]
+    vals = vals[1:ptr-1]
+	return sparse(rows, cols, vals, dim, dim)
+end
+
+# ╔═╡ df3e1b95-26b2-4e55-b609-9aa72b6f7245
+function get_H_action(sys, states, states_map)
+    """
+    Returns a function that can be used directly with KrylovKit.
+    You need to provide an initial vector when calling eigsolve.
+    """
+    dim = length(states)
+    
+    function H_action(v)
+        w = zeros(Float64, dim)
+        
+        for (i, (upmask, dnmask)) in enumerate(states)
+            v_i = v[i]
+            
+            # Diagonal term
+            w[i] += sys.U * count_ones(upmask & dnmask) * v_i
+            
+            # Hopping terms
+            for site in 1:(sys.L-1)
+                for (from, to) in ((site, site+1), (site+1, site))
+                    
+                    # Up electron hopping
+                    if (upmask >> (from-1)) & 1 == 1 && (upmask >> (to-1)) & 1 == 0
+                        new_upmask = (upmask & ~(1 << (from-1))) | (1 << (to-1))
+                        j = states_map[(new_upmask, dnmask)]
+                        sign = fermionic_sign(upmask, from, to)
+                        w[j] += -sys.t * sign * v_i
+                    end
+                    
+                    # Down electron hopping
+                    if (dnmask >> (from-1)) & 1 == 1 && (dnmask >> (to-1)) & 1 == 0
+                        new_dnmask = (dnmask & ~(1 << (from-1))) | (1 << (to-1))
+                        j = states_map[(upmask, new_dnmask)]
+                        sign = fermionic_sign(dnmask, from, to)
+                        w[j] += -sys.t * sign * v_i
+                    end
+                end
+            end
+        end
+        return w
+    end
+    
+    return H_action
+end
+
+# ╔═╡ ab7e44cc-ccb7-4a6d-9170-ecf49eed5ed4
+function compare_times(sys)
+	nup = div(sys.L, 2)
+	ndn = sys.L - nup
+	states, states_map = get_basis_states(sys.L, nup, ndn)
+	v0 = rand(Float64, length(states))
+
+	# method 1
+	@time begin
+		H = get_sparse_H(sys, states, states_map)	
+		eigsolve(H, v0, 1, :SR; ishermitian=true)
+	end
+
+	# method 2 
+	@time begin
+		H_prealloc = get_sparse_H_prealloc(sys, states, states_map)
+		eigsolve(H_prealloc, v0, 1, :SR; ishermitian=true)
+	end
+
+	# method 3 
+	@time begin
+		H_action = get_H_action(sys, states, states_map)
+		eigsolve(H_action, v0, 1, :SR; ishermitian=true)
+	end
+end
+
+# ╔═╡ 745897b7-1060-474a-a73f-1fd819f64261
+begin
+	b_sys = HubbardSystem(3, 4.0, 1.0)
+	compare_times(b_sys)
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 ITensorMPS = "0d1a4710-d33b-49a5-8f18-73bdf49b47e2"
 ITensors = "9136182c-28ba-11e9-034c-db9fb085ebd5"
+KrylovKit = "0b1a1467-8014-51b9-945f-bf0ae24f4b77"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [compat]
+Combinatorics = "~1.0.3"
 ITensorMPS = "~0.3.19"
 ITensors = "~0.9.9"
+KrylovKit = "~0.10.0"
 Plots = "~1.40.19"
 """
 
@@ -127,7 +458,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.6"
 manifest_format = "2.0"
-project_hash = "38b366fb3c76a8d7da42014c0cc2e828fe01c717"
+project_hash = "3d4ba718e92745b22721b4f64bf150bf91906231"
 
 [[deps.Accessors]]
 deps = ["CompositionsBase", "ConstructionBase", "Dates", "InverseFunctions", "MacroTools"]
@@ -342,6 +673,11 @@ deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
 git-tree-sha1 = "37ea44092930b1811e666c3bc38065d7d87fcc74"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.13.1"
+
+[[deps.Combinatorics]]
+git-tree-sha1 = "8010b6bb3388abe68d95743dcbea77650bb2eddf"
+uuid = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
+version = "1.0.3"
 
 [[deps.CommonWorldInvalidations]]
 git-tree-sha1 = "ae52d1c52048455e85a387fbee9be553ec2b68d0"
@@ -1793,14 +2129,26 @@ version = "1.9.2+0"
 
 # ╔═╡ Cell order:
 # ╠═9d221240-8355-11f0-3235-df1e3d2cbd7a
+# ╟─356cc532-fb02-45d4-bec7-a2d4654877e2
 # ╠═03916343-2294-4148-8f38-cd312118ac8d
+# ╟─19308d82-eea4-4876-8923-81b2ba6e8352
 # ╠═89da86e9-81df-4649-a2d2-f0193ab3f8f1
+# ╟─54190501-f71c-4752-8ad5-498cf92533a4
 # ╠═d1c7fd9b-c4b4-4f54-b3f3-ff0c852fc351
+# ╟─6b44fb80-f1f6-4c1d-ad73-73ecba9bd327
 # ╠═3411e784-d9a5-47c8-99cd-b160bde62747
-# ╠═618943aa-f998-414d-9602-c0f3fdaa5d2b
 # ╠═de9db2de-0690-49b7-9cc5-bb6ef7d52a2e
-# ╠═6e1bc960-b50d-48c5-948c-604c4a3e0dd2
 # ╠═30e37d1e-b0dd-4427-be31-4b95ad458ea2
 # ╠═0bb71ff2-6230-4399-ad6a-ae9cd4ae56e5
+# ╠═b3ca3f4b-8a85-4d57-9120-82622c96564a
+# ╠═800a42bd-4252-4637-bcd4-b9d618a90374
+# ╠═30a0b412-9a2f-4d7f-8c84-e1732d7f80de
+# ╠═f6d37a19-d451-43b9-bc52-9e3ecd75ae71
+# ╠═b6e555bd-676e-4456-a756-4a3544e89cc0
+# ╠═60b73927-5131-4ecf-bc22-b33a38ade6f6
+# ╠═2c9b9ba1-4da2-4dbd-bbc4-519a5420b4ab
+# ╠═df3e1b95-26b2-4e55-b609-9aa72b6f7245
+# ╠═ab7e44cc-ccb7-4a6d-9170-ecf49eed5ed4
+# ╠═745897b7-1060-474a-a73f-1fd819f64261
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
