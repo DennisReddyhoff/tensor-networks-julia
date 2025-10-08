@@ -25,7 +25,7 @@ Also see [DMRG.jl](src/DMRG.jl) and [DMRGPlots.jl](src/DMRGPlots.jl)
 
 ## 2) Tensor Networks for Computational Fluid Dynamics
 
-[Pluto Notebook (Hosted on pluto.land)](https://pluto.land/n/2q35hmix)
+[Pluto Notebook (Hosted on pluto.land)](https://pluto.land/n/qnb6hbzn)
 You will need to run with Binder to use the interactive features
 
 [Pluto Noteboook (Github)](notebooks/1d_cfd.jl)
