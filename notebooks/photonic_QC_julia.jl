@@ -173,7 +173,7 @@ md"""
 `permanent_ryser(A)`
 
 Compute the permanent of matrix A using Ryser's algorithm.
-Complexity: O(2ⁿ · n) vs O(n!n) for brute force.
+Complexity: O(2ⁿ) vs O(n!) for brute force.
 
 Uses the inclusion-exclusion formula:
 perm(A) = (-1)ⁿ Σ_{S⊆[n]} (-1)|S| ∏ᵢ (Σⱼ∈S Aᵢⱼ)
@@ -212,13 +212,13 @@ function permanent_ryser(A::Matrix{T}) where T
             for i in 1:n
                 row_sums[i] += A[i, col]
             end
-            sign = -sign  # One more element in subset
+            sign = -sign  
         else
             # Bit turned off: subtract this column
             for i in 1:n
                 row_sums[i] -= A[i, col]
             end
-            sign = -sign  # One fewer element in subset
+            sign = -sign 
         end
         
         gray = next_gray
@@ -385,7 +385,7 @@ Returns:
 function sample_states(
 	p_exact::Vector{Tuple{Vector{Int64}, Float64}}, 
 	n_samples::Int64,
-	post_select::Union{Function, Nothing} = nothing
+	projection::Union{Function, Nothing} = nothing
 )
 	states = [p[1] for p in p_exact]
 	probs = [p[2] for p in p_exact]
@@ -393,8 +393,8 @@ function sample_states(
 	sampled_idx = sample(1:length(states), Weights(probs), n_samples)
 	sampled = states[sampled_idx]
 
-	if post_select != nothing
-		sampled = [s for s in sampled if post_select(s)]
+	if projection != nothing
+		sampled = [s for s in sampled if projection(s)]
 	end
 	
 	# Convert to counts
@@ -616,7 +616,7 @@ begin
 end
 
 # ╔═╡ e2a107c8-4256-483c-90c4-10f67b5465d3
-function post_select(s::Vector{Int})
+function cnot_projection(s::Vector{Int})
     # Ancilla modes: 1st and last
     ancilla_ok = (s[1] == 0) && (s[6] == 0)
     # Control qubit (modes 2,3) must have exactly one photon
@@ -628,7 +628,7 @@ end
 
 # ╔═╡ 7bf001f1-5208-4c19-a050-9eac183a0a1b
 begin
-	_, selected_counts = sample_states(cnot_results, n_samples, post_select)
+	_, selected_counts = sample_states(cnot_results, n_samples, cnot_projection)
 	filter_idx = findall(c -> c > 0, selected_counts)
 	filtered_post_states = cnot_states[filter_idx]
 	filtered_post_counts = selected_counts[filter_idx]
@@ -638,7 +638,7 @@ begin
 		label="Sampled ($n_samples)",
 		xlabel="Output State",
 		ylabel="Counts",
-		title="Ralph CNOT Gate with Post-Selection",
+		title="Ralph CNOT Gate with Projection",
 		xticks=(1:length(filtered_post_states), filtered_post_states),
 		legend=:topright,
 		bar_width=0.7,
