@@ -11,7 +11,7 @@ julia --project=.
 ```
 ## 1) Simulating a Photonic Quantum Computer in Julia
 
-[Pluto Notebook (Hosted on pluto.land)]([https://pluto.land/n/ir51nblx](https://pluto.land/n/97dw84ng))
+[Pluto Notebook (Hosted on pluto.land)](https://pluto.land/n/97dw84ng)
 
 [Pluto Noteboook (Github)](notebooks/photonic_QC_julia.jl)
 
